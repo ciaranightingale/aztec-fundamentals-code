@@ -1,12 +1,17 @@
-pub mod access_control;
-pub mod burn_private;
-pub mod burn_public;
-pub mod mint_to_public;
-pub mod reading_constants;
-pub mod transfer;
-pub mod transfer_in_private;
-pub mod transfer_in_public;
-pub mod transfer_to_private;
-pub mod transfer_to_public_and_prepare_private_balance_increase;
-pub mod transfer_to_public;
+mod burn_private;
+mod burn_public;
+mod mint_to_private;
+mod mint_to_public;
+mod mint_to_commitment;
+mod initialize_transfer_commitment;
+// mod reading_constants;
+mod transfer_private_to_private;
+mod transfer_private_to_public;
+mod transfer_private_to_public_with_commitment;
+mod transfer_private_to_commitment;
+mod transfer_public_to_public;
+mod transfer_public_to_commitment;
+mod transfer_public_to_private;
+mod tokenized_vault;
+
 pub mod utils;
