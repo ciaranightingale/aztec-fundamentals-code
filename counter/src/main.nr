@@ -1,5 +1,6 @@
 // Import the aztec macro which transforms our module into an Aztec contract
-use dep::aztec::macros::aztec;
+pub mod test;
+use aztec::macros::aztec;
 
 // Apply the #[aztec] attribute to generate all the boilerplate code for our contract
 #[aztec]

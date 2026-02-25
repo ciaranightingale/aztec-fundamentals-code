@@ -1,6 +1,7 @@
 use crate::test::utils::{self, mint_amount};
 use crate::Token;
 use aztec::{note::constants::MAX_NOTES_PER_PAGE, test::helpers::authwit as authwit_cheatcodes};
+use caller_contract::CallerContract;
 use uint_note::UintNote;
 
 #[test]
@@ -18,10 +19,13 @@ unconstrained fn transfer_private_on_behalf_of_other() {
         auth_account,
         transfer_private_from_call_interface,
     );
-    // Transfer tokens via proxy
     env.call_private(
         owner,
-        transfer_private_from_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_from_call_interface.target_contract,
+            transfer_private_from_call_interface.selector,
+            transfer_private_from_call_interface.args,
+        ),
     );
     // Check balances
     utils::check_private_balance(
@@ -112,10 +116,13 @@ unconstrained fn transfer_private_failure_on_behalf_of_more_than_balance() {
         auth_account,
         transfer_private_from_call_interface,
     );
-    // Transfer tokens via proxy
     env.call_private(
         owner,
-        transfer_private_from_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_from_call_interface.target_contract,
+            transfer_private_from_call_interface.selector,
+            transfer_private_from_call_interface.args,
+        ),
     );
 }
 
@@ -129,10 +136,13 @@ unconstrained fn transfer_private_failure_on_behalf_of_other_without_approval() 
     let transfer_amount = (1000 as u128);
     let transfer_private_from_call_interface = Token::at(token_contract_address)
         .transfer_private_to_private(owner, recipient, transfer_amount, 1);
-    // Transfer tokens via proxy without approval
     env.call_private(
         owner,
-        transfer_private_from_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_from_call_interface.target_contract,
+            transfer_private_from_call_interface.selector,
+            transfer_private_from_call_interface.args,
+        ),
     );
 }
 
@@ -145,16 +155,19 @@ unconstrained fn transfer_private_failure_on_behalf_of_other_wrong_caller() {
     let transfer_amount: u128 = 1000;
     let transfer_private_from_call_interface = Token::at(token_contract_address)
         .transfer_private_to_private(owner, recipient, transfer_amount, 1);
-    // Add authwit with wrong caller (owner instead of proxy)
+    // Add authwit with wrong caller (owner instead of auth_account)
     authwit_cheatcodes::add_private_authwit_from_call(
         env,
         owner,
         owner,
         transfer_private_from_call_interface,
     );
-    // Transfer tokens via proxy
     env.call_private(
         owner,
-        transfer_private_from_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_from_call_interface.target_contract,
+            transfer_private_from_call_interface.selector,
+            transfer_private_from_call_interface.args,
+        ),
     );
 }

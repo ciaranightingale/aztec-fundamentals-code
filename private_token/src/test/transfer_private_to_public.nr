@@ -1,6 +1,7 @@
 use crate::test::utils::{self, mint_amount};
 use crate::Token;
 use aztec::{note::constants::MAX_NOTES_PER_PAGE, test::helpers::authwit as authwit_cheatcodes};
+use caller_contract::CallerContract;
 use uint_note::UintNote;
 
 #[test]
@@ -47,10 +48,13 @@ unconstrained fn transfer_private_to_public_on_behalf_of_other() {
         auth_account,
         transfer_private_to_public_call_interface,
     );
-    // transfer_private_to_public tokens via proxy
     env.call_private(
         owner,
-        transfer_private_to_public_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_to_public_call_interface.target_contract,
+            transfer_private_to_public_call_interface.selector,
+            transfer_private_to_public_call_interface.args,
+        ),
     );
     utils::check_private_balance(
         env,
@@ -145,10 +149,13 @@ unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_more_than
         auth_account,
         transfer_private_to_public_call_interface,
     );
-    // transfer_private_to_public tokens via proxy
     env.call_private(
         owner,
-        transfer_private_to_public_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_to_public_call_interface.target_contract,
+            transfer_private_to_public_call_interface.selector,
+            transfer_private_to_public_call_interface.args,
+        ),
     );
 }
 
@@ -160,17 +167,20 @@ unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_invalid_d
     let transfer_private_to_public_amount = mint_amount + (1 as u128);
     let transfer_private_to_public_call_interface = Token::at(token_contract_address)
         .transfer_private_to_public(owner, _recipient, transfer_private_to_public_amount, 0);
-    // Add authwit with wrong caller (owner instead of proxy)
+    // Add authwit with wrong caller (owner instead of auth_account)
     authwit_cheatcodes::add_private_authwit_from_call(
         env,
         owner,
         owner,
         transfer_private_to_public_call_interface,
     );
-    // transfer_private_to_public tokens via proxy
     env.call_private(
         owner,
-        transfer_private_to_public_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_to_public_call_interface.target_contract,
+            transfer_private_to_public_call_interface.selector,
+            transfer_private_to_public_call_interface.args,
+        ),
     );
 }
 
@@ -182,9 +192,12 @@ unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_no_approv
     let transfer_private_to_public_amount = mint_amount + (1 as u128);
     let transfer_private_to_public_call_interface = Token::at(token_contract_address)
         .transfer_private_to_public(owner, _recipient, transfer_private_to_public_amount, 0);
-    // transfer_private_to_public tokens via proxy without approval
     env.call_private(
         owner,
-        transfer_private_to_public_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_private_to_public_call_interface.target_contract,
+            transfer_private_to_public_call_interface.selector,
+            transfer_private_to_public_call_interface.args,
+        ),
     );
 }

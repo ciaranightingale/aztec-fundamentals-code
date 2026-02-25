@@ -1,6 +1,7 @@
 use crate::test::utils::{self, mint_amount};
 use crate::Token;
 use aztec::{oracle::random::random, test::helpers::authwit as authwit_cheatcodes};
+use caller_contract::CallerContract;
 
 #[test]
 unconstrained fn burn_private_on_behalf_of_self() {
@@ -28,10 +29,13 @@ unconstrained fn burn_private_on_behalf_of_other() {
     let burn_call_interface =
         Token::at(token_contract_address).burn_private(owner, burn_amount, random());
     authwit_cheatcodes::add_private_authwit_from_call(env, owner, auth_account, burn_call_interface);
-    // Burn tokens via proxy
     env.call_private(
         owner,
-        burn_call_interface
+        CallerContract::at(auth_account).forward_private_3(
+            burn_call_interface.target_contract,
+            burn_call_interface.selector,
+            burn_call_interface.args,
+        ),
     );
     utils::check_private_balance(
         env,
@@ -64,7 +68,11 @@ unconstrained fn burn_private_failure_on_behalf_of_other_more_than_balance() {
     authwit_cheatcodes::add_private_authwit_from_call(env, owner, auth_account, burn_call_interface);
     env.call_private(
         owner,
-        burn_call_interface
+        CallerContract::at(auth_account).forward_private_3(
+            burn_call_interface.target_contract,
+            burn_call_interface.selector,
+            burn_call_interface.args,
+        ),
     );
 }
 #[test(should_fail_with = "Unknown auth witness for message hash")]
@@ -79,7 +87,11 @@ unconstrained fn burn_private_failure_on_behalf_of_other_without_approval() {
         Token::at(token_contract_address).burn_private(owner, burn_amount, random());
     env.call_private(
         owner,
-        burn_call_interface
+        CallerContract::at(auth_account).forward_private_3(
+            burn_call_interface.target_contract,
+            burn_call_interface.selector,
+            burn_call_interface.args,
+        ),
     );
 }
 
@@ -97,6 +109,10 @@ unconstrained fn burn_private_failure_on_behalf_of_other_wrong_designated_caller
     authwit_cheatcodes::add_private_authwit_from_call(env, owner, owner, burn_call_interface);
     env.call_private(
         owner,
-        burn_call_interface
+        CallerContract::at(auth_account).forward_private_3(
+            burn_call_interface.target_contract,
+            burn_call_interface.selector,
+            burn_call_interface.args,
+        ),
     );
 }

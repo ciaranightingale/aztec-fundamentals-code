@@ -38,8 +38,6 @@ pub contract Token {
     /// @param total_supply The total supply of the token
     /// @param public_balances The public balances of the token
     /// @param minter The account permissioned to mint the token
-    /// @param asset The underlying asset for yield-bearing vault functionality
-    /// @param vault_offset The offset used to prevent inflation attacks
     #[storage]
     struct Storage<Context> {
         name: PublicImmutable<FieldCompressedString, Context>,

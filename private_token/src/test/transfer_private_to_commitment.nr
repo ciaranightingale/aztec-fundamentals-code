@@ -1,6 +1,7 @@
 use crate::test::utils::{self, mint_amount};
 use crate::Token;
 use aztec::test::helpers::authwit as authwit_cheatcodes;
+use caller_contract::CallerContract;
 
 #[test]
 unconstrained fn transfer_private_to_commitment() {
@@ -60,10 +61,13 @@ unconstrained fn transfer_private_to_commitment_on_behalf_of_other() {
         transfer_to_commitment_call_interface,
     );
 
-    // Transfer tokens via proxy
     env.call_private(
         owner,
-        transfer_to_commitment_call_interface
+        CallerContract::at(auth_account).forward_private_4(
+            transfer_to_commitment_call_interface.target_contract,
+            transfer_to_commitment_call_interface.selector,
+            transfer_to_commitment_call_interface.args,
+        ),
     );
 
     // Check balances
