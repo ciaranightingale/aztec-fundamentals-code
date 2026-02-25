@@ -1,7 +1,6 @@
 use crate::test::utils::{self, mint_amount};
 use crate::Token;
 use aztec::{note::constants::MAX_NOTES_PER_PAGE, test::helpers::authwit as authwit_cheatcodes};
-use generic_proxy::GenericProxy;
 use uint_note::UintNote;
 
 #[test]
@@ -36,8 +35,8 @@ unconstrained fn transfer_private_to_public_on_behalf_of_self() {
 
 #[test]
 unconstrained fn transfer_private_to_public_on_behalf_of_other() {
-    let (mut env, token_contract_address, owner, recipient, proxy) =
-        utils::setup_and_mint_to_private_with_proxy();
+    let (mut env, token_contract_address, owner, recipient, auth_account) =
+        utils::setup_and_mint_to_private_with_account_contracts();
 
     let transfer_private_to_public_amount = mint_amount / (10 as u128);
     let transfer_private_to_public_call_interface = Token::at(token_contract_address)
@@ -45,17 +44,13 @@ unconstrained fn transfer_private_to_public_on_behalf_of_other() {
     authwit_cheatcodes::add_private_authwit_from_call(
         env,
         owner,
-        proxy,
+        auth_account,
         transfer_private_to_public_call_interface,
     );
     // transfer_private_to_public tokens via proxy
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_4(
-            transfer_private_to_public_call_interface.target_contract,
-            transfer_private_to_public_call_interface.selector,
-            transfer_private_to_public_call_interface.args,
-        ),
+        transfer_private_to_public_call_interface
     );
     utils::check_private_balance(
         env,
@@ -138,8 +133,8 @@ unconstrained fn transfer_private_to_public_failure_more_than_balance() {
 
 #[test(should_fail_with = "Balance too low")]
 unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_more_than_balance() {
-    let (mut env, token_contract_address, owner, recipient, proxy) =
-        utils::setup_and_mint_to_private_with_proxy();
+    let (mut env, token_contract_address, owner, recipient, auth_account) =
+        utils::setup_and_mint_to_private_with_account_contracts();
 
     let transfer_private_to_public_amount = mint_amount + (1 as u128);
     let transfer_private_to_public_call_interface = Token::at(token_contract_address)
@@ -147,24 +142,20 @@ unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_more_than
     authwit_cheatcodes::add_private_authwit_from_call(
         env,
         owner,
-        proxy,
+        auth_account,
         transfer_private_to_public_call_interface,
     );
     // transfer_private_to_public tokens via proxy
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_4(
-            transfer_private_to_public_call_interface.target_contract,
-            transfer_private_to_public_call_interface.selector,
-            transfer_private_to_public_call_interface.args,
-        ),
+        transfer_private_to_public_call_interface
     );
 }
 
 #[test(should_fail_with = "Unknown auth witness for message hash")]
 unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_invalid_designated_caller() {
-    let (mut env, token_contract_address, owner, _recipient, proxy) =
-        utils::setup_and_mint_to_private_with_proxy();
+    let (mut env, token_contract_address, owner, _recipient, auth_account) =
+        utils::setup_and_mint_to_private_with_account_contracts();
 
     let transfer_private_to_public_amount = mint_amount + (1 as u128);
     let transfer_private_to_public_call_interface = Token::at(token_contract_address)
@@ -179,18 +170,14 @@ unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_invalid_d
     // transfer_private_to_public tokens via proxy
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_4(
-            transfer_private_to_public_call_interface.target_contract,
-            transfer_private_to_public_call_interface.selector,
-            transfer_private_to_public_call_interface.args,
-        ),
+        transfer_private_to_public_call_interface
     );
 }
 
 #[test(should_fail_with = "Unknown auth witness for message hash")]
 unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_no_approval() {
-    let (mut env, token_contract_address, owner, _recipient, proxy) =
-        utils::setup_and_mint_to_private_with_proxy();
+    let (mut env, token_contract_address, owner, _recipient, auth_account) =
+        utils::setup_and_mint_to_private_with_account_contracts();
 
     let transfer_private_to_public_amount = mint_amount + (1 as u128);
     let transfer_private_to_public_call_interface = Token::at(token_contract_address)
@@ -198,10 +185,6 @@ unconstrained fn transfer_private_to_public_failure_on_behalf_of_other_no_approv
     // transfer_private_to_public tokens via proxy without approval
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_4(
-            transfer_private_to_public_call_interface.target_contract,
-            transfer_private_to_public_call_interface.selector,
-            transfer_private_to_public_call_interface.args,
-        ),
+        transfer_private_to_public_call_interface
     );
 }

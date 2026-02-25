@@ -2,7 +2,6 @@ use crate::test::utils::{self, mint_amount};
 use crate::Token;
 use aztec::protocol::traits::FromField;
 use aztec::test::helpers::authwit as authwit_cheatcodes;
-use generic_proxy::GenericProxy;
 use uint_note::PartialUintNote;
 
 #[test]
@@ -58,8 +57,8 @@ unconstrained fn transfer_private_to_public_with_commitment_emits_validity_nulli
 
 #[test]
 unconstrained fn transfer_private_to_public_with_commitment_on_behalf_of_other() {
-    let (mut env, token_contract_address, owner, recipient, proxy) =
-        utils::setup_and_mint_to_private_with_proxy();
+    let (mut env, token_contract_address, owner, recipient, auth_account) =
+        utils::setup_and_mint_to_private_with_account_contracts();
 
     utils::check_private_balance(env, token_contract_address, owner, mint_amount);
     utils::check_private_balance(env, token_contract_address, recipient, 0 as u128);
@@ -73,18 +72,14 @@ unconstrained fn transfer_private_to_public_with_commitment_on_behalf_of_other()
     authwit_cheatcodes::add_private_authwit_from_call(
         env,
         owner,
-        proxy,
+        auth_account,
         transfer_private_to_public_commitment_call_interface,
     );
 
-    // Transfer tokens via proxy
+    // Transfer tokens
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_4(
-            transfer_private_to_public_commitment_call_interface.target_contract,
-            transfer_private_to_public_commitment_call_interface.selector,
-            transfer_private_to_public_commitment_call_interface.args,
-        ),
+        transfer_private_to_public_commitment_call_interface
     );
 
     // Check balances

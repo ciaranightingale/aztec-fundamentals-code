@@ -1,7 +1,6 @@
 use crate::test::utils::{self, mint_amount};
 use crate::Token;
 use aztec::{oracle::random::random, test::helpers::authwit as authwit_cheatcodes};
-use generic_proxy::GenericProxy;
 
 #[test]
 unconstrained fn burn_private_on_behalf_of_self() {
@@ -21,22 +20,18 @@ unconstrained fn burn_private_on_behalf_of_self() {
 
 #[test]
 unconstrained fn burn_private_on_behalf_of_other() {
-    let (mut env, token_contract_address, owner, _, proxy) =
-        utils::setup_and_mint_to_private_with_proxy();
+    let (mut env, token_contract_address, owner, _, auth_account) =
+        utils::setup_and_mint_to_private_with_account_contracts();
     let burn_amount = mint_amount / 10;
 
     // Burn on behalf of other
     let burn_call_interface =
         Token::at(token_contract_address).burn_private(owner, burn_amount, random());
-    authwit_cheatcodes::add_private_authwit_from_call(env, owner, proxy, burn_call_interface);
+    authwit_cheatcodes::add_private_authwit_from_call(env, owner, auth_account, burn_call_interface);
     // Burn tokens via proxy
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_3(
-            burn_call_interface.target_contract,
-            burn_call_interface.selector,
-            burn_call_interface.args,
-        ),
+        burn_call_interface
     );
     utils::check_private_balance(
         env,
@@ -58,28 +53,24 @@ unconstrained fn burn_private_failure_more_than_balance() {
 
 #[test(should_fail_with = "Balance too low")]
 unconstrained fn burn_private_failure_on_behalf_of_other_more_than_balance() {
-    let (mut env, token_contract_address, owner, _, proxy) =
-        utils::setup_and_mint_to_public_with_proxy();
+    let (mut env, token_contract_address, owner, _, auth_account) =
+        utils::setup_and_mint_to_public_with_account_contracts();
 
     // Burn more than balance
     let burn_amount = mint_amount * (10 as u128);
     // Burn on behalf of other
     let burn_call_interface =
         Token::at(token_contract_address).burn_private(owner, burn_amount, random());
-    authwit_cheatcodes::add_private_authwit_from_call(env, owner, proxy, burn_call_interface);
+    authwit_cheatcodes::add_private_authwit_from_call(env, owner, auth_account, burn_call_interface);
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_3(
-            burn_call_interface.target_contract,
-            burn_call_interface.selector,
-            burn_call_interface.args,
-        ),
+        burn_call_interface
     );
 }
 #[test(should_fail_with = "Unknown auth witness for message hash")]
 unconstrained fn burn_private_failure_on_behalf_of_other_without_approval() {
-    let (mut env, token_contract_address, owner, _, proxy) =
-        utils::setup_and_mint_to_public_with_proxy();
+    let (mut env, token_contract_address, owner, _, auth_account) =
+        utils::setup_and_mint_to_public_with_account_contracts();
 
     // Burn more than balance
     let burn_amount = mint_amount / (10 as u128);
@@ -88,32 +79,24 @@ unconstrained fn burn_private_failure_on_behalf_of_other_without_approval() {
         Token::at(token_contract_address).burn_private(owner, burn_amount, random());
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_3(
-            burn_call_interface.target_contract,
-            burn_call_interface.selector,
-            burn_call_interface.args,
-        ),
+        burn_call_interface
     );
 }
 
 #[test(should_fail_with = "Unknown auth witness for message hash")]
 unconstrained fn burn_private_failure_on_behalf_of_other_wrong_designated_caller() {
-    let (mut env, token_contract_address, owner, _, proxy) =
-        utils::setup_and_mint_to_public_with_proxy();
+    let (mut env, token_contract_address, owner, _, auth_account) =
+        utils::setup_and_mint_to_public_with_account_contracts();
 
     // Burn more than balance
     let burn_amount = mint_amount / (10 as u128);
     // Burn on behalf of other
     let burn_call_interface =
         Token::at(token_contract_address).burn_private(owner, burn_amount, random());
-    // Add authwit with wrong caller (owner instead of proxy)
+    // Add authwit with wrong caller (owner instead of auth_account)
     authwit_cheatcodes::add_private_authwit_from_call(env, owner, owner, burn_call_interface);
     env.call_private(
         owner,
-        GenericProxy::at(proxy).forward_private_3(
-            burn_call_interface.target_contract,
-            burn_call_interface.selector,
-            burn_call_interface.args,
-        ),
+        burn_call_interface
     );
 }
