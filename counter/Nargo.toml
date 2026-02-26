@@ -1,5 +1,5 @@
 [package]
-name = "counter"
+name = "counter_contract"
 type = "contract"
 authors = [""]
 

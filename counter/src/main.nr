@@ -12,7 +12,7 @@ pub contract Counter {
         // MessageDelivery controls how note delivery happens (onchain constrained vs unconstrained)
         messages::message_delivery::MessageDelivery,
         // debug_log_format lets us log messages during execution for debugging
-        oracle::debug_log::debug_log_format,
+        oracle::logging::debug_log_format,
         // AztecAddress is the type for addresses on Aztec, ToField lets us convert types to Field
         protocol::{address::AztecAddress, traits::ToField},
         // Owned is a wrapper that maps an owner address to a state variable
@@ -44,13 +44,21 @@ pub contract Counter {
     // A private function that increments the counter for a given owner
     #[external("private")]
     fn increment(owner: AztecAddress) {
+        assert(self.msg_sender() == owner, "Unauthorized");
         // Log the owner's address for debugging purposes
         debug_log_format("Incrementing counter for owner {0}", [owner.to_field()]);
         // Add 1 to the owner's counter and deliver the note onchain with constrained delivery
         self.storage.counters.at(owner).add(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
-    // A utility function that reads state without generating a proof - used for queries
+    #[external("private")]
+    fn decrement(owner: AztecAddress) {
+        assert(self.msg_sender() == owner, "Unauthorized");
+        debug_log_format("Decrementing counter for owner {0}", [owner.to_field()]);
+        self.storage.counters.at(owner).sub(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+    }
+
+    // A utility function that reads state without generating a proof - used for querying PXE state
     #[external("utility")]
     unconstrained fn get_counter(owner: AztecAddress) -> pub u128 {
         // Read and return the current balance (counter value) for the given owner
