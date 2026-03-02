@@ -57,7 +57,7 @@ pub contract Token {
     /// @param upgrade_authority The address of the upgrade authority (zero address if not upgradeable)
     #[external("public")]
     #[initializer]
-    fn constructor_with_initial_supply(
+    fn constructor(
         name: str<31>,
         symbol: str<31>,
         decimals: u8,

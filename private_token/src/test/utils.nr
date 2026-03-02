@@ -44,7 +44,7 @@ pub unconstrained fn deploy_token_with_initial_supply(
     to: AztecAddress,
 ) -> AztecAddress {
     // Deploy token contract
-    let initializer_call_interface = Token::interface().constructor_with_initial_supply(
+    let initializer_call_interface = Token::interface().constructor(
         "TestToken0000000000000000000000",
         "TT00000000000000000000000000000",
         18,
