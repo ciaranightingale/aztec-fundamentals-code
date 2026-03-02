@@ -37,28 +37,6 @@ pub unconstrained fn setup_with_initial_supply(
     (env, token_contract_address, owner, recipient)
 }
 
-pub unconstrained fn setup_with_minter(
-    with_account_contracts: bool,
-) -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
-    // Setup env, generate keys
-    let mut env = TestEnvironment::new();
-    let (owner, recipient, minter) = if with_account_contracts {
-        let owner = env.create_contract_account();
-        let recipient = env.create_contract_account();
-        let minter = env.create_contract_account();
-        (owner, recipient, minter)
-    } else {
-        let owner = env.create_light_account();
-        let recipient = env.create_light_account();
-        let minter = env.create_light_account();
-        (owner, recipient, minter)
-    };
-
-    let token_contract_address = deploy_token_with_minter(&mut env, owner, minter);
-
-    (env, token_contract_address, owner, recipient, minter)
-}
-
 pub unconstrained fn deploy_token_with_initial_supply(
     env: &mut TestEnvironment,
     owner: AztecAddress,
@@ -81,59 +59,22 @@ pub unconstrained fn deploy_token_with_initial_supply(
     token_contract_address
 }
 
-pub unconstrained fn deploy_token_with_minter(
-    env: &mut TestEnvironment,
-    owner: AztecAddress,
-    minter: AztecAddress,
-) -> AztecAddress {
-    // Deploy token contract
-    let initializer_call_interface = Token::interface().constructor_with_minter(
-        "TestToken0000000000000000000000",
-        "TT00000000000000000000000000000",
-        18,
-        minter,
-    );
-    let token_contract_address = env.deploy("@token_contract/Token").with_public_initializer(
-        owner,
-        initializer_call_interface,
-    );
-
-    token_contract_address
-}
-
-pub unconstrained fn setup_and_mint_to_public_with_minter(
-    with_account_contracts: bool,
-) -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
-    // Setup
-    let (env, token_contract_address, owner, recipient, minter) =
-        setup_with_minter(with_account_contracts);
-
-    // Mint some tokens
-    env.call_public(minter, Token::at(token_contract_address).mint_to_public(owner, mint_amount));
-
-    (env, token_contract_address, owner, recipient, minter)
-}
-
 pub unconstrained fn setup_and_mint_to_public_without_minter(
     with_account_contracts: bool,
 ) -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress) {
-    // Setup
     let (env, token_contract_address, owner, recipient) =
         setup_with_initial_supply(with_account_contracts, mint_amount);
 
     (env, token_contract_address, owner, recipient)
 }
 
-pub unconstrained fn setup_and_mint_to_private_with_minter(
-    with_account_contracts: bool,
+pub unconstrained fn setup_and_mint_to_public_with_account_contracts(
 ) -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
-    let (env, token_contract_address, owner, recipient, minter) =
-        setup_with_minter(with_account_contracts);
-
-    // Mint some tokens
-    mint_to_private(env, token_contract_address, owner, mint_amount, minter);
-
-    (env, token_contract_address, owner, recipient, minter)
+    let (mut env, token_contract_address, owner, recipient) =
+        setup_and_mint_to_public_without_minter(true);
+    // Deploy a CallerContract so tests can trigger authwit by routing calls through it
+    let auth_account = env.deploy("@caller_contract/CallerContract").without_initializer();
+    (env, token_contract_address, owner, recipient, auth_account)
 }
 
 pub unconstrained fn setup_and_mint_to_private_without_minter(
@@ -151,17 +92,31 @@ pub unconstrained fn setup_and_mint_to_private_without_minter(
     (env, token_contract_address, owner, recipient)
 }
 
-pub unconstrained fn mint_to_private(
+pub unconstrained fn setup_and_mint_to_private_with_account_contracts(
+) -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
+    let (mut env, token_contract_address, owner, recipient) =
+        setup_and_mint_to_private_without_minter(true);
+    // Deploy a CallerContract so tests can trigger authwit by routing calls through it
+    // (msg_sender = CallerContract != owner, which triggers the authwit check)
+    let auth_account = env.deploy("@caller_contract/CallerContract").without_initializer();
+    (env, token_contract_address, owner, recipient, auth_account)
+}
+
+/// @notice Transfers tokens from public balance to a new private note.
+/// Mocks getRandomField to ensure each call creates a distinct note commitment.
+pub unconstrained fn transfer_to_private(
     env: TestEnvironment,
     token_contract_address: AztecAddress,
-    recipient: AztecAddress,
+    from: AztecAddress,
+    to: AztecAddress,
     amount: u128,
-    caller: AztecAddress,
 ) {
     let note_randomness = random();
     let _ = OracleMock::mock("getRandomField").returns(note_randomness);
-
-    env.call_private(caller, Token::at(token_contract_address).mint_to_private(recipient, amount));
+    env.call_private(
+        from,
+        Token::at(token_contract_address).transfer_public_to_private(from, to, amount, 0),
+    );
 }
 
 pub unconstrained fn transfer_in_private(
@@ -273,7 +228,7 @@ pub unconstrained fn authorize_transfer_private_to_public(
     );
 }
 
-/// @notice Sets public authwit for the `transfer_private_to_public` method. `caller` is also the recipient.
+/// @notice Sets public authwit for the `transfer_public_to_public` method. `caller` is also the recipient.
 pub unconstrained fn authorize_transfer_public_to_public(
     env: TestEnvironment,
     token: AztecAddress,

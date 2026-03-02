@@ -54,16 +54,15 @@ unconstrained fn transfer_private_zero_amount() {
 
 #[test]
 unconstrained fn transfer_private_multiple_notes_recursively() {
-    // Setup with account contracts. Slower since we actually deploy them, but needed for authwits.
-    let (mut env, token_contract_address, owner, recipient, minter) =
-        utils::setup_with_minter(true);
-
     let notes_amount: u128 = 1000;
     let notes_count: u128 = 12;
     let total_amount = notes_amount * notes_count;
 
+    let (mut env, token_contract_address, owner, recipient) =
+        utils::setup_with_initial_supply(true, total_amount);
+
     for _ in 0..notes_count {
-        utils::mint_to_private(env, token_contract_address, owner, notes_amount, minter);
+        utils::transfer_to_private(env, token_contract_address, owner, owner, notes_amount);
     }
 
     // Transfer tokens

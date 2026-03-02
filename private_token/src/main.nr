@@ -37,7 +37,6 @@ pub contract Token {
     /// @param private_balances The private balances of the token
     /// @param total_supply The total supply of the token
     /// @param public_balances The public balances of the token
-    /// @param minter The account permissioned to mint the token
     #[storage]
     struct Storage<Context> {
         name: PublicImmutable<FieldCompressedString, Context>,
@@ -46,7 +45,6 @@ pub contract Token {
         private_balances: Owned<BalanceSet<Context>, Context>,
         total_supply: PublicMutable<u128, Context>,
         public_balances: Map<AztecAddress, PublicMutable<u128, Context>, Context>,
-        minter: PublicImmutable<AztecAddress, Context>,
     }
 
     /// @notice Initializes the token with an initial supply
@@ -71,27 +69,6 @@ pub contract Token {
         self.storage.decimals.initialize(decimals);
 
         self.internal._mint_to_public(to, initial_supply);
-    }
-
-    /// @notice Initializes the token with a minter
-    /// @param name The name of the token
-    /// @param symbol The symbol of the token
-    /// @param decimals The number of decimals of the token
-    /// @param minter The address of the minter
-    /// @param upgrade_authority The address of the upgrade authority (zero address if not upgradeable)
-    #[external("public")]
-    #[initializer]
-    fn constructor_with_minter(
-        name: str<31>,
-        symbol: str<31>,
-        decimals: u8,
-        minter: AztecAddress,
-    ) {
-        self.storage.name.initialize(FieldCompressedString::from_string(name));
-        self.storage.symbol.initialize(FieldCompressedString::from_string(symbol));
-        self.storage.decimals.initialize(decimals);
-
-        self.storage.minter.initialize(minter);
     }
 
     /** ==========================================================
@@ -268,50 +245,8 @@ pub contract Token {
     }
 
     /** ==========================================================
-    * ======================= MINTABLE ==========================
-    * ======================================================== */
-
-    /// @notice Mints tokens to a private balance
-    /// @dev Mints tokens to a private balance and enqueues a public call to increase the total supply
-    /// @param to The address of the recipient
-    /// @param amount The amount of tokens to mint
-    #[external("private")]
-    fn mint_to_private(to: AztecAddress, amount: u128) {
-        _validate_minter(self.msg_sender(), self.storage.minter.read());
-
-        self.internal._mint_to_private(to, amount);
-    }
-
-    /// @notice Mints tokens to an address publicly
-    /// @dev Increases the public balance of `to` by `amount` and the total supply
-    /// @param to The address of the recipient
-    /// @param amount The amount of tokens to mint
-    #[external("public")]
-    fn mint_to_public(to: AztecAddress, amount: u128) {
-        _validate_minter(self.msg_sender(), self.storage.minter.read());
-
-        self.internal._mint_to_public(to, amount);
-    }
-
-    /// @notice Internal function to increase the total supply by `amount`
-    /// @param amount The amount to increase the total supply by
-    #[external("public")]
-    #[only_self]
-    fn increase_total_supply_internal(amount: u128) {
-        self.internal._increase_total_supply(amount);
-    }
-
-    /** ==========================================================
      * ================= TOKEN LIBRARIES =========================
      * ======================================================== */
-
-    /// @notice Validates that the caller is the minter
-    /// @param sender The address of the caller
-    /// @param minter The address of the authorized minter
-    #[contract_library_method]
-    fn _validate_minter(sender: AztecAddress, minter: AztecAddress) {
-        assert(minter.eq(sender), "caller is not minter");
-    }
 
     /// @notice Decreases the private balance of `account` by `amount` and emits a private balance note with the change to account
     /// @param context The private context
@@ -407,17 +342,6 @@ pub contract Token {
     fn _mint_to_public(to: AztecAddress, amount: u128) {
         self.internal._increase_public_balance(to, amount);
         self.internal._increase_total_supply(amount);
-    }
-
-    /// @notice Mints tokens to a private balance and enqueues a public call to increase the total supply
-    /// @param context The private context
-    /// @param private_balances The storage pointer to the private balances
-    /// @param to The address of the recipient
-    /// @param amount The amount of tokens to mint
-    #[internal("private")]
-    fn _mint_to_private(to: AztecAddress, amount: u128) {
-        self.internal._increase_private_balance(to, amount);
-        self.enqueue_self.increase_total_supply_internal(amount);
     }
 
     /** ==========================================================
