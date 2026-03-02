@@ -254,6 +254,20 @@ pub unconstrained fn get_private_balance_notes(
     notes
 }
 
+/// @notice Retrieves whether a commitment has been stored in the storage of the target contract
+pub unconstrained fn _commitment_storage_read(
+    env: TestEnvironment,
+    target_contract_address: AztecAddress,
+    commitment: Field,
+) -> bool {
+    // set target contract address
+    let value = env.public_context_at(target_contract_address, |context| {
+        let value: bool = context.storage_read(commitment);
+        value
+    });
+    value
+}
+
 /// @notice Sets private authwit for the `transfer_private_to_public` method. `caller` is also the recipient.
 pub unconstrained fn authorize_transfer_private_to_public(
     env: TestEnvironment,
@@ -290,6 +304,26 @@ pub unconstrained fn authorize_transfer_public_to_public(
         caller,
         transfer_public_to_public_call_interface,
     );
+}
+
+// While authwits authorize a contract to perform an action, spending private notes still requires
+// knowledge of the note secrets. For private tokens, the note owner must be involved in the
+// transaction -- they cannot simply give another user an authwit and have that user spend the notes
+// independently. We deploy a proxy contract so that msg_sender in the target differs from the
+// caller, which is the condition that triggers authwit validation. We can't use another account for
+// this, since different scopes are enforced by TXE.
+pub unconstrained fn setup_and_mint_to_private_with_account_contracts() -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
+    let (mut env, token_contract_address, owner, recipient) =
+        setup_and_mint_to_private_without_minter(/* with_account_contracts */ true);
+    let auth_account = env.deploy("@caller_contract/CallerContract").without_initializer();
+    (env, token_contract_address, owner, recipient, auth_account)
+}
+
+pub unconstrained fn setup_and_mint_to_public_with_account_contracts() -> (TestEnvironment, AztecAddress, AztecAddress, AztecAddress, AztecAddress) {
+    let (mut env, token_contract_address, owner, recipient) =
+        setup_and_mint_to_public_without_minter(/* with_account_contracts */ true);
+    let auth_account = env.deploy("@caller_contract/CallerContract").without_initializer();
+    (env, token_contract_address, owner, recipient, auth_account)
 }
 
 /// @notice Returns the u128 maximum value

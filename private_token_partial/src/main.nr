@@ -138,6 +138,32 @@ pub contract Token {
         self.internal._increase_private_balance(to, amount);
     }
 
+    /// @notice Transfer tokens from a private balance to the recipient commitment, which must be already initialized.
+    /// @dev Spends notes, emits a new note (UintNote) with any remaining change, and enqueues a public call.
+    ///      The `msg_sender` must be the completer of the partial note.
+    /// @param from The address of the sender
+    /// @param commitment The partial note representing the commitment (privacy entrance that the recipient shares with the sender)
+    /// @param amount The amount of tokens to transfer
+    /// @param _nonce The nonce used for authwitness
+    #[external("private")]
+    fn transfer_private_to_commitment(
+        from: AztecAddress,
+        commitment: Field,
+        amount: u128,
+        _nonce: Field,
+    ) {
+        _validate_from_private::<4>(self.context, from);
+
+        self.internal._decrease_private_balance(from, amount, INITIAL_TRANSFER_CALL_MAX_NOTES);
+
+        let completer = self.msg_sender();
+        PartialUintNote::from_field(commitment).complete_from_private(
+            self.context,
+            completer,
+            amount,
+        );
+    }
+
     /// @notice Transfer tokens from public balance to private balance
     /// @dev Enqueues a public call to decrease account balance and emits a new note with balance difference
     /// @param from The address of the sender
@@ -156,6 +182,17 @@ pub contract Token {
         self.enqueue_self.decrease_public_balance_internal(from, amount);
 
         self.internal._increase_private_balance(to, amount);
+    }
+
+    /// @notice Initializes a transfer commitment to be used for transfers/mints
+    /// @dev Returns a partial note that can be used to execute transfers/mints
+    /// @param to The address of the recipient
+    /// @param completer The address allowed to complete the partial note
+    /// @return commitment The partial note initialized for the transfer/mint commitment
+    #[external("private")]
+    fn initialize_transfer_commitment(to: AztecAddress, completer: AztecAddress) -> Field {
+        let commitment = self.internal._initialize_transfer_commitment(to, completer);
+        commitment.to_field()
     }
 
     /// @notice Recursively subtracts balance from private balance
@@ -190,6 +227,33 @@ pub contract Token {
 
         self.internal._decrease_public_balance(from, amount);
         self.internal._increase_public_balance(to, amount);
+    }
+
+    /// @notice Finalizes a transfer of token `amount` from public balance of `from` to a commitment of `to`
+    /// @dev The transfer must be prepared by calling `initialize_transfer_commitment` first and the resulting
+    /// `commitment` must be passed as an argument to this function.
+    /// @dev The sender will be used as the completer for the partial note.
+    /// @param from The address of the sender
+    /// @param commitment The partial note representing the commitment (privacy entrance)
+    /// @param amount The amount of tokens to transfer
+    /// @param _nonce The nonce used for authwitness
+    #[external("public")]
+    fn transfer_public_to_commitment(
+        from: AztecAddress,
+        commitment: Field,
+        amount: u128,
+        _nonce: Field,
+    ) {
+        self.internal._validate_from_public(from);
+
+        self.internal._decrease_public_balance(from, amount);
+
+        let completer = self.msg_sender();
+        self.internal._increase_commitment_balance(
+            PartialUintNote::from_field(commitment),
+            completer,
+            amount,
+        );
     }
 
     /// @notice Increases the public balance of `to` by `amount`
@@ -293,6 +357,23 @@ pub contract Token {
         self.internal._mint_to_public(to, amount);
     }
 
+    /// @notice Finalizes a mint to a commitment
+    /// @dev Finalizes a mint to a commitment and updates the total supply
+    /// @param commitment The partial note representing the mint commitment (privacy entrance)
+    /// @param amount The amount of tokens to mint
+    #[external("public")]
+    fn mint_to_commitment(commitment: Field, amount: u128) {
+        let sender = self.msg_sender();
+        _validate_minter(sender, self.storage.minter.read());
+        let completer = sender;
+        self.internal._increase_total_supply(amount);
+        self.internal._increase_commitment_balance(
+            PartialUintNote::from_field(commitment),
+            completer,
+            amount,
+        );
+    }
+
     /// @notice Internal function to increase the total supply by `amount`
     /// @param amount The amount to increase the total supply by
     #[external("public")]
@@ -363,6 +444,21 @@ pub contract Token {
         self.storage.public_balances.at(from).write(new_balance);
     }
 
+    /// @notice Completes a partial note
+    /// @dev Completes a partial note and increases the balance of the commitment by `amount`
+    /// @param context The context of the public call
+    /// @param commitment The partial note representing the commitment (privacy entrance)
+    /// @param completer The address used to compute the validity commitment
+    /// @param amount The amount of tokens to increase the balance of the commitment by
+    #[internal("public")]
+    fn _increase_commitment_balance(
+        commitment: PartialUintNote,
+        completer: AztecAddress,
+        amount: u128,
+    ) {
+        commitment.complete(self.context, completer, amount);
+    }
+
     /// @notice Subtracts balance from private balance
     /// @dev Subtracts amount from private balance and returns the change to the owner, recursively if necessary
     /// @param context The private context
@@ -396,6 +492,28 @@ pub contract Token {
     fn _increase_total_supply(amount: u128) {
         let new_supply = self.storage.total_supply.read() + amount;
         self.storage.total_supply.write(new_supply);
+    }
+
+    /// @notice Initializes a transfer commitment to be used for transfers/mints
+    /// @param context The context of the private call
+    /// @param private_balances The storage pointer to the private balances
+    /// @param to The address of the recipient
+    /// @param completer The address used to compute the validity commitment
+    /// @return The partial note that can be used to execute the transfer/mint
+    #[internal("private")]
+    fn _initialize_transfer_commitment(
+        to: AztecAddress,
+        completer: AztecAddress,
+    ) -> PartialUintNote {
+        let commitment = UintNote::partial(
+            to,
+            self.storage.private_balances.get_storage_slot(),
+            self.context,
+            to,
+            completer,
+        );
+
+        commitment
     }
 
     /// @notice Mints tokens to a public balance and increases the total supply
