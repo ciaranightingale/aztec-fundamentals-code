@@ -68,7 +68,8 @@ pub contract Token {
         self.storage.symbol.initialize(FieldCompressedString::from_string(symbol));
         self.storage.decimals.initialize(decimals);
 
-        self.internal._mint_to_public(to, initial_supply);
+        self.internal._increase_public_balance(to, initial_supply);
+        self.internal._increase_total_supply(initial_supply);
     }
 
     /** ==========================================================
@@ -331,17 +332,6 @@ pub contract Token {
     fn _increase_total_supply(amount: u128) {
         let new_supply = self.storage.total_supply.read() + amount;
         self.storage.total_supply.write(new_supply);
-    }
-
-    /// @notice Mints tokens to a public balance and increases the total supply
-    /// @param public_balances The storage pointer to the public balances
-    /// @param total_supply The storage pointer to the total supply
-    /// @param to The address of the recipient
-    /// @param amount The amount of tokens to mint
-    #[internal("public")]
-    fn _mint_to_public(to: AztecAddress, amount: u128) {
-        self.internal._increase_public_balance(to, amount);
-        self.internal._increase_total_supply(amount);
     }
 
     /** ==========================================================

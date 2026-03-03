@@ -19,8 +19,22 @@ pub unconstrained fn get_private_counter(env: &mut TestEnvironment, contract_add
     value
 }
 
+pub unconstrained fn get_public_counter(env: &mut TestEnvironment, contract_address: AztecAddress, account: AztecAddress) -> u128 {
+    env.view_public(Counter::at(contract_address).get_public_counter(account))
+}
+
+pub unconstrained fn increment_public_counter(env: &mut TestEnvironment, user: AztecAddress, counter_contract_address: AztecAddress) -> u128 {
+    env.call_public(user, Counter::at(counter_contract_address).increment_public(user));
+    get_public_counter(env, counter_contract_address, user)
+}
+
+pub unconstrained fn decrement_public_counter(env: &mut TestEnvironment, user: AztecAddress, counter_contract_address: AztecAddress) -> u128 {
+    env.call_public(user, Counter::at(counter_contract_address).decrement_public(user));
+    get_public_counter(env, counter_contract_address, user)
+}
+
 pub unconstrained fn increment_counter(env: &mut TestEnvironment, user: AztecAddress, counter_contract_address: AztecAddress) -> u128 {
-    let increment_call_private = Counter::at(counter_contract_address).increment(user);
+    let increment_call_private = Counter::at(counter_contract_address).increment_private(user);
     env.call_private(
         // who is calling
         user,

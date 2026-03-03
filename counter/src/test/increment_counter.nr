@@ -37,7 +37,7 @@ unconstrained fn test_decrement_counter() {
     assert(counter_value_before == 1);
 
     // now decrement
-    let decrement_call_private = Counter::at(counter_contract_address).decrement(user);
+    let decrement_call_private = Counter::at(counter_contract_address).decrement_private(user);
     env.call_private(
         // who is calling
         user,
@@ -59,7 +59,7 @@ unconstrained fn test_non_owner_cannot_call_increment() {
     let non_owner = env.create_light_account();
 
     // attempt to increment
-    let increment_call_private = Counter::at(counter_contract_address).increment(owner);
+    let increment_call_private = Counter::at(counter_contract_address).increment_private(owner);
     env.call_private(
         // who is calling
         non_owner,
@@ -84,7 +84,7 @@ unconstrained fn test_non_owner_cannot_decrement() {
     assert(counter_value_before == 1);
 
     // now decrement
-    let decrement_call_private = Counter::at(counter_contract_address).decrement(owner);
+    let decrement_call_private = Counter::at(counter_contract_address).decrement_private(owner);
     env.call_private(
         // who is calling
         non_owner,
