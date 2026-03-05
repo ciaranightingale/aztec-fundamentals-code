@@ -12,24 +12,20 @@ pub contract Token {
         context::PrivateContext,
         macros::{functions::{external, initializer, internal, only_self, view}, storage::storage},
         messages::message_delivery::MessageDelivery,
-        protocol::{
-            address::AztecAddress,
-            traits::{FromField, ToField},
-        },
-        state_vars::{Map, Owned, PublicImmutable, PublicMutable, StateVariable},
+        protocol::address::AztecAddress,
+        state_vars::{Map, Owned, PublicImmutable, PublicMutable},
     };
     // note library
-    use uint_note::{PartialUintNote, UintNote};
+    use uint_note::UintNote;
     // compression library
     use compressed_string::FieldCompressedString;
     // private balance library
     use balance_set::BalanceSet;
 
-    // gas-optimized max notes for initial transfer call
-    // NOTE: should I remove this to make it simpler? 
+    // Max notes consumed in the initial transfer call (heavier circuit, fewer notes)
     global INITIAL_TRANSFER_CALL_MAX_NOTES: u32 = 2;
-    // max notes transfer for recursive transfer call if initial max notes are exceeded
-    global RECURSIVE_TRANSFER_CALL_MAX_NOTES: u32 = 8; // NOTE: idkkk what this is 
+    // Max notes consumed in each recursive transfer call (lighter circuit, more notes per call)
+    global RECURSIVE_TRANSFER_CALL_MAX_NOTES: u32 = 8;
 
     /// @param name The name of the token
     /// @param symbol The symbol of the token
@@ -47,14 +43,12 @@ pub contract Token {
         public_balances: Map<AztecAddress, PublicMutable<u128, Context>, Context>,
     }
 
-    /// @notice Initializes the token with an initial supply
-    /// @dev Since this constructor doesn't set a minter address the mint functions will be disabled
+    /// @notice Initializes the token with a fixed initial supply minted to `to`
     /// @param name The name of the token
     /// @param symbol The symbol of the token
     /// @param decimals The number of decimals of the token
     /// @param initial_supply The initial supply of the token
     /// @param to The address to mint the initial supply to
-    /// @param upgrade_authority The address of the upgrade authority (zero address if not upgradeable)
     #[external("public")]
     #[initializer]
     fn constructor(

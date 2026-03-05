@@ -1,5 +1,5 @@
 // Import the aztec macro which transforms our module into an Aztec contract
-pub mod test;
+mod test;
 use aztec::macros::aztec;
 
 // Apply the #[aztec] attribute to generate all the boilerplate code for our contract
@@ -44,32 +44,28 @@ pub contract Counter {
 
     // A private function that increments the counter for a given owner
     #[external("private")]
-    fn increment_private(owner: AztecAddress) {
-        assert(self.msg_sender() == owner, "Unauthorized");
+    fn increment_private() {
         // Log the owner's address for debugging purposes
-        debug_log_format("Incrementing counter for owner {0}", [owner.to_field()]);
+        debug_log_format("Incrementing counter for owner {0}", [self.msg_sender().to_field()]);
         // Add 1 to the owner's counter and deliver the note onchain with constrained delivery
-        self.storage.counters.at(owner).add(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+        self.storage.counters.at(self.msg_sender()).add(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     #[external("public")]
-    fn increment_public(owner: AztecAddress) {
-        assert(self.msg_sender() == owner, "Unauthorized");
-        debug_log_format("Incrementing counter for owner {0}", [owner.to_field()]);
-        self.storage.public_counters.at(owner).write(self.storage.public_counters.at(owner).read() + 1);
+    fn increment_public() {
+        debug_log_format("Incrementing counter for owner {0}", [self.msg_sender().to_field()]);
+        self.storage.public_counters.at(self.msg_sender()).write(self.storage.public_counters.at(self.msg_sender()).read() + 1);
     }
 
     #[external("public")]
-    fn decrement_public(owner: AztecAddress) {
-        assert(self.msg_sender() == owner, "Unauthorized");
-        self.storage.public_counters.at(owner).write(self.storage.public_counters.at(owner).read() - 1);
+    fn decrement_public() {
+        self.storage.public_counters.at(self.msg_sender()).write(self.storage.public_counters.at(self.msg_sender()).read() - 1);
     }
 
     #[external("private")]
-    fn decrement_private(owner: AztecAddress) {
-        assert(self.msg_sender() == owner, "Unauthorized");
-        debug_log_format("Decrementing counter for owner {0}", [owner.to_field()]);
-        self.storage.counters.at(owner).sub(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+    fn decrement_private() {
+        debug_log_format("Decrementing counter for owner {0}", [self.msg_sender().to_field()]);
+        self.storage.counters.at(self.msg_sender()).sub(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     #[external("public")]
@@ -80,7 +76,7 @@ pub contract Counter {
 
     // A utility function that reads state without generating a proof - used for querying PXE state
     #[external("utility")]
-    unconstrained fn get_counter(owner: AztecAddress) -> pub u128 {
+    unconstrained fn get_private_counter(owner: AztecAddress) -> pub u128 {
         // Read and return the current balance (counter value) for the given owner
         self.storage.counters.at(owner).balance_of()
     }

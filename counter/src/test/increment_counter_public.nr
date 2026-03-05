@@ -26,25 +26,3 @@ unconstrained fn test_decrement_public() {
     let counter_after_decrement = utils::decrement_public_counter(&mut env, user, counter_contract_address);
     assert(counter_after_decrement == 0, "counter should be back to 0 after decrement");
 }
-
-#[test(should_fail_with = "Unauthorized")]
-unconstrained fn test_non_owner_cannot_increment_public() {
-    let (mut env, counter_contract_address) = utils::deploy_counter_contract();
-
-    let owner = env.create_light_account();
-    let non_owner = env.create_light_account();
-
-    env.call_public(non_owner, Counter::at(counter_contract_address).increment_public(owner));
-}
-
-#[test(should_fail_with = "Unauthorized")]
-unconstrained fn test_non_owner_cannot_decrement_public() {
-    let (mut env, counter_contract_address) = utils::deploy_counter_contract();
-
-    let owner = env.create_light_account();
-    let non_owner = env.create_light_account();
-
-    utils::increment_public_counter(&mut env, owner, counter_contract_address);
-
-    env.call_public(non_owner, Counter::at(counter_contract_address).decrement_public(owner));
-}
