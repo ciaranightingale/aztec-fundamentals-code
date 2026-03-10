@@ -16,17 +16,17 @@ pub contract Counter {
         // AztecAddress is the type for addresses on Aztec, ToField lets us convert types to Field
         protocol::{address::AztecAddress, traits::ToField},
         // Owned is a wrapper that maps an owner address to a state variable
-        state_vars::{Map, Owned, PublicMutable},
+        state_vars::{Map, Owned, PrivateMutable, PublicMutable},
     };
-    // BalanceSet is a specialized collection for managing balances using encrypted notes
-    use balance_set::BalanceSet;
+    // UintNote is a simple note storing a u128 value
+    use uint_note::UintNote;
 
     // Define the contract's persistent storage layout
     #[storage]
     struct Storage<Context> {
-        // Each owner address maps to their own BalanceSet, which tracks their counter value as a balance
-        counters: Owned<BalanceSet<Context>, Context>,
-        public_counters: Map<AztecAddress, PublicMutable<u128, Context>, Context>
+        // Each owner address maps to their own PrivateMutable, which holds exactly one note with their counter value
+        counters: Owned<PrivateMutable<UintNote, Context>, Context>,
+        public_counters: Map<AztecAddress, PublicMutable<u128, Context>, Context>,
     }
 
     // This function runs once when the contract is deployed - it sets up the initial state
@@ -34,21 +34,30 @@ pub contract Counter {
     // Mark as a private function so it executes on the client side with zero-knowledge proofs
     #[external("private")]
     fn initialize(headstart: u64, owner: AztecAddress) {
-        // Add the headstart value to the owner's counter balance
-        // .at(owner) selects the owner's BalanceSet, .add() creates a new note with the value
-        // .deliver(ONCHAIN_CONSTRAINED) ensures the note is delivered onchain with a proof that it's valid
-        self.storage.counters.at(owner).add(headstart as u128).deliver(
+        // Create the first note for the owner with the headstart value
+        self.storage.counters.at(owner).initialize(UintNote { value: headstart as u128 }).deliver(
             MessageDelivery.ONCHAIN_CONSTRAINED,
         );
     }
 
-    // A private function that increments the counter for a given owner
+    // A private function that increments the counter for msg_sender
     #[external("private")]
     fn increment_private() {
         // Log the owner's address for debugging purposes
         debug_log_format("Incrementing counter for owner {0}", [self.msg_sender().to_field()]);
-        // Add 1 to the owner's counter and deliver the note onchain with constrained delivery
-        self.storage.counters.at(self.msg_sender()).add(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+        // If not yet initialized, create the first note with value 1; otherwise nullify the current note and replace it with value + 1
+        self.storage.counters.at(self.msg_sender()).initialize_or_replace(|opt_note| {
+            UintNote { value: opt_note.unwrap_or(UintNote { value: 0 }).value + 1 }
+        }).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+    }
+
+    #[external("private")]
+    fn decrement_private() {
+        debug_log_format("Decrementing counter for owner {0}", [self.msg_sender().to_field()]);
+        // If not yet initialized, treat current value as 0 (underflow will panic); otherwise nullify and replace with value - 1
+        self.storage.counters.at(self.msg_sender()).initialize_or_replace(|opt_note| {
+            UintNote { value: opt_note.unwrap_or(UintNote { value: 0 }).value - 1 }
+        }).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     #[external("public")]
@@ -62,12 +71,6 @@ pub contract Counter {
         self.storage.public_counters.at(self.msg_sender()).write(self.storage.public_counters.at(self.msg_sender()).read() - 1);
     }
 
-    #[external("private")]
-    fn decrement_private() {
-        debug_log_format("Decrementing counter for owner {0}", [self.msg_sender().to_field()]);
-        self.storage.counters.at(self.msg_sender()).sub(1).deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
-    }
-
     #[external("public")]
     #[view]
     fn get_public_counter(owner: AztecAddress) -> pub u128 {
@@ -77,7 +80,12 @@ pub contract Counter {
     // A utility function that reads state without generating a proof - used for querying PXE state
     #[external("utility")]
     unconstrained fn get_private_counter(owner: AztecAddress) -> pub u128 {
-        // Read and return the current balance (counter value) for the given owner
-        self.storage.counters.at(owner).balance_of()
+        // Check if initialized first - if not, return 0 (no note exists yet)
+        let counter = self.storage.counters.at(owner);
+        if counter.is_initialized() {
+            counter.view_note().value
+        } else {
+            0
+        }
     }
 }
