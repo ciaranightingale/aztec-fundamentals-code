@@ -13,9 +13,7 @@ pub unconstrained fn deploy_counter_contract() -> (TestEnvironment, AztecAddress
 }
 
 pub unconstrained fn get_private_counter(env: &mut TestEnvironment, contract_address: AztecAddress, account: AztecAddress) -> u128 {
-    // let amt = env.simulate_utility(Token::at(token_contract_address).balance_of_private(address));
-    // amt
-    let value = env.simulate_utility(Counter::at(contract_address).get_private_counter(account));
+    let value = env.execute_utility(Counter::at(contract_address).get_private_counter(account));
     value
 }
 

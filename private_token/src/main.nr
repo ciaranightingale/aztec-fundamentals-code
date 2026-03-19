@@ -266,7 +266,7 @@ pub contract Token {
 
         // At last we finalize the transfer. Usage of the `unsafe` method here is safe because we set the `from`
         // function argument to a message sender, guaranteeing that he can transfer only his own tokens.
-        self.enqueue_self._finalize_transfer_to_private_unsafe(from, amount, partial_note);
+        self.enqueue_self._finalize_transfer_to_private(from, amount, partial_note);
     }
 
     /// This function exists separately from `prepare_private_balance_increase` solely as an optimization as it allows
@@ -292,19 +292,6 @@ pub contract Token {
     /// (this has to be done in the calling function).
     #[external("public")]
     #[only_self]
-    fn _finalize_transfer_to_private_unsafe(
-        from_and_completer: AztecAddress,
-        amount: u128,
-        partial_note: PartialUintNote,
-    ) {
-        self.internal._finalize_transfer_to_private(from_and_completer, amount, partial_note);
-    }
-
-    // In all the flows in this contract, `from` (the account from which we're subtracting the `amount`) and
-    // `completer` (the entity that can complete the partial note) are the same so we represent them with a single
-    // argument.
-    // docs:start:finalize_transfer_to_private
-    #[internal("public")]
     fn _finalize_transfer_to_private(
         from_and_completer: AztecAddress,
         amount: u128,
@@ -319,7 +306,6 @@ pub contract Token {
         // We finalize the transfer by completing the partial note.
         partial_note.complete(self.context, from_and_completer, amount);
     }
-    // docs:end:finalize_transfer_to_private
 
     /// Mints token `amount` to a private balance of `to`. Message sender has to have minter permissions (checked
     /// in the enqueued call).
