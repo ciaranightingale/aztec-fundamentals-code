@@ -1,13 +1,11 @@
 use crate::Token;
 use aztec::{
     note::{constants::MAX_NOTES_PER_PAGE, note_viewer_options::NoteViewerOptions},
-    oracle::random::random,
     protocol::{address::AztecAddress, traits::Packable},
     state_vars::{OwnedStateVariable, PrivateSet},
     test::helpers::test_environment::TestEnvironment,
 };
 use std::ops::WrappingSub;
-use std::test::OracleMock;
 use uint_note::UintNote;
 
 pub global mint_amount: u128 = 10_000 as u128;
@@ -64,9 +62,6 @@ pub unconstrained fn mint_to_private(
     amount: u128,
     caller: AztecAddress,
 ) {
-    let note_randomness = random();
-    let _ = OracleMock::mock("getRandomField").returns(note_randomness);
-
     env.call_private(caller, Token::at(token_contract_address).mint_to_private(recipient, amount));
 }
 
@@ -125,18 +120,61 @@ pub unconstrained fn get_private_balance(
     amt
 }
 
+// Unlike `get_private_balance` which calls the contract's `balance_of_private` function and returns
+// a single summed u128, this function queries the PXE's note database to retrieve the individual
+// notes that make up an account's private balance. This is useful for tests that need to verify how
+// a balance is composed after operations like recursive transfers
+// (e.g., "owner should have 2 notes: one worth 1000 and one worth 1").
+//
+// Why is this so complicated? Private notes in Aztec don't live on-chain - they live in the PXE
+// (Private eXecution Environment), the client-side component that stores and manages private state.
+// The contract only defines the storage layout (which slots correspond to which state variables),
+// but the actual note data is held in the PXE's database. To query individual notes from a test,
+// we need to:
+// 1. Create a utility context scoped to the token contract (so we know which storage layout to use)
+// 2. Look up the storage slot for the private_balances map from that layout
+// 3. Reconstruct the PrivateSet at that slot for the specific account
+// 4. Call view_notes to query the PXE for the individual notes at that slot
 pub unconstrained fn get_private_balance_notes(
     env: TestEnvironment,
     token_contract_address: AztecAddress,
     account: AztecAddress,
     offset: u32,
 ) -> BoundedVec<UintNote, MAX_NOTES_PER_PAGE> {
+    // `utility_context_at` creates an unconstrained execution context scoped to the token contract.
+    // This is a test-only helper -- in the TXE (Test eXecution Environment), it gives us the
+    // ability to query the PXE's note database using the token contract's storage layout.
+    // The closure receives a `context` that knows which contract's storage slots to reference.
     let notes = env.utility_context_at(token_contract_address, |context| {
+        // NoteViewerOptions configures how we query notes from the PXE.
+        // The type parameters tell it what kind of note to expect (UintNote) and its packed size.
+        // `set_offset(offset)` allows pagination -- if there are more notes than MAX_NOTES_PER_PAGE,
+        // we can call this function again with a higher offset to get the next page.
         let options =
             NoteViewerOptions::<UintNote, <UintNote as Packable>::N>::new().set_offset(offset);
+
+        // Every storage variable in an Aztec contract is assigned a specific slot at compile time.
+        // `Token::storage_layout()` gives us the compile-time map of slot assignments.
+        // Here we grab the slot for `private_balances`, which is a Map<AztecAddress, BalancesMap>.
+        // The PXE indexes notes by these slots, so we need the correct slot to query the right notes.
         let private_balances_slot = Token::storage_layout().private_balances.slot;
+
+        // Now we reconstruct the PrivateSet for a specific account. Inside the contract,
+        // `self.storage.private_balances.at(account)` does this automatically. But since we're
+        // outside the contract in a test context, we have to manually build it:
+        // - `context`: the utility context scoped to the token contract
+        // - `private_balances_slot`: the base slot of the private_balances map
+        // - `account`: the map key (which account's notes we want to query)
+        // OwnedStateVariable derives the final storage slot by hashing the base slot with the
+        // account address -- the same derivation that Map.at() does inside the contract.
+        // This final slot is what the PXE uses to index this account's notes.
         let set: PrivateSet<UintNote, _> =
             OwnedStateVariable::new(context, private_balances_slot, account);
+
+        // Finally, query the PXE for the actual notes at this derived slot. This returns each
+        // individual UintNote (each with its own `.value`), rather than summing them into a
+        // single balance. This is what makes this function different from `get_private_balance` --
+        // we can inspect the note structure itself (how many notes exist, what each one is worth).
         let notes: BoundedVec<UintNote, MAX_NOTES_PER_PAGE> = set.view_notes(options);
         notes
     });

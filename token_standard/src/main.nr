@@ -28,7 +28,7 @@ pub contract Token {
     // calls have less overhead. Note: total recursion depth is limited (~3 levels) by proof size.
     global RECURSIVE_TRANSFER_CALL_MAX_NOTES: u32 = 8;
 
-    // Sentinel address used in Transfer events to represent the private side of a balance change.
+    // address used in Transfer events to represent the private side of a balance change.
     // sha224sum 'PRIVATE_ADDRESS'
     global PRIVATE_ADDRESS_MAGIC_VALUE: AztecAddress =
         AztecAddress::from_field(0x1ea7e01501975545617c2e694d931cb576b691a4a867fed81ebd3264);
@@ -110,8 +110,10 @@ pub contract Token {
         amount: u128,
         authwit_nonce: Field,
     ) {
+        // 1. Decrease the private balance - make an internal function because we will reuse this logic
         self.internal._decrease_private_balance(from, amount, INITIAL_TRANSFER_CALL_MAX_NOTES);
 
+        // 2. Increase the private balance of the recipient - make an internal function because we will reuse this logic
         self.internal._increase_private_balance(to, amount);
     }
 
@@ -129,8 +131,10 @@ pub contract Token {
         amount: u128,
         authwit_nonce: Field,
     ) {
+        // we need to do this the opposite way round bc we can only go from private land to public land not the other way around
+        // 1. Decrease the public balance - this needs to be an enqueued call because we are in private land and need to modify public state
         self.enqueue_self.decrease_public_balance_internal(from, amount);
-
+        // 2. Increase the private balance of the recipient, and emits a private balance note to recipient from sender - make an internal function because we will reuse this logic
         self.internal._increase_private_balance(to, amount);
     }
 
@@ -163,7 +167,9 @@ pub contract Token {
         amount: u128,
         authwit_nonce: Field,
     ) {
+        // 1. Decrease the balance of the sender
         self.internal._decrease_public_balance(from, amount);
+        // 2. Increase the balance of the recipient
         self.internal._increase_public_balance(to, amount);
 
         self.emit(Transfer { from, to, amount });
@@ -258,9 +264,13 @@ pub contract Token {
     /// @param amount The amount of tokens to mint
     #[external("private")]
     fn mint_to_private(to: AztecAddress, amount: u128) {
-        _validate_minter(self.msg_sender(), self.storage.minter.read());
+        // 1. Check the caller is the deployer/minter
+        assert(self.storage.minter.read().eq(self.msg_sender()), "caller is not minter");
 
-        self.internal._mint_to_private(to, amount);
+        // 2. internal call to increase the private balance of the recipient - make an internal function because we will reuse this logic
+        self.internal._increase_private_balance(to, amount);
+        // 3. Enqueue a call to increase the total supply - we need to enqueue because we are in private land and need to modify public state
+        self.enqueue_self.increase_total_supply_internal(amount);
     }
 
     /// @notice Mints tokens to an address publicly
@@ -269,9 +279,17 @@ pub contract Token {
     /// @param amount The amount of tokens to mint
     #[external("public")]
     fn mint_to_public(to: AztecAddress, amount: u128) {
-        _validate_minter(self.msg_sender(), self.storage.minter.read());
+        // 1. check the caller is the deployer
+        assert(self.storage.minter.read().eq(self.msg_sender()), "caller is not minter");
 
-        self.internal._mint_to_public(to, amount);
+        // 2. increase the public balance of the to address
+        self.internal._increase_public_balance(to, amount);
+
+        // 3. increase the total supply (same logic as above)
+        self.internal._increase_total_supply(amount);
+
+        // 4. emit a transfer event from the zero address to the recipient
+        self.emit(Transfer { from: AztecAddress::zero(), to, amount });
     }
 
     /// @notice Internal function to increase the total supply by `amount`
@@ -279,58 +297,16 @@ pub contract Token {
     #[external("public")]
     #[only_self]
     fn increase_total_supply_internal(amount: u128) {
+        // 1. Increase the total supply - make an internal function because we have already implemented this logic in mint_to_public
         self.internal._increase_total_supply(amount);
 
+        // 2. we are in public land so emit an event
         self.emit(Transfer { from: AztecAddress::zero(), to: PRIVATE_ADDRESS_MAGIC_VALUE, amount });
     }
 
     /** ==========================================================
-     * ======================= BURNABLE ==========================
+     * ===================== INTERNAL =========================
      * ======================================================== */
-
-    /// @notice Burns tokens from a private balance
-    /// @dev Burns tokens from a private balance and enqueues a public call to update the total supply
-    /// @param from The address of the sender
-    /// @param amount The amount of tokens to burn
-    /// @param authwit_nonce The nonce used for authwitness
-    #[authorize_once("from", "authwit_nonce")]
-    #[external("private")]
-    fn burn_private(from: AztecAddress, amount: u128, authwit_nonce: Field) {
-        self.internal._burn_private(from, amount);
-    }
-
-    /// @notice Burns tokens from a public balance
-    /// @dev Burns tokens from a public balance and updates the total supply
-    /// @param from The address of the sender
-    /// @param amount The amount of tokens to burn
-    /// @param authwit_nonce The nonce used for authwitness
-    #[authorize_once("from", "authwit_nonce")]
-    #[external("public")]
-    fn burn_public(from: AztecAddress, amount: u128, authwit_nonce: Field) {
-        self.internal._burn_public(from, amount);
-    }
-
-    /// @notice Decreases the total supply by `amount`
-    /// @param amount The amount of tokens to decrease the total supply by
-    #[external("public")]
-    #[only_self]
-    fn decrease_total_supply_internal(amount: u128) {
-        self.internal._decrease_total_supply(amount);
-
-        self.emit(Transfer { from: PRIVATE_ADDRESS_MAGIC_VALUE, to: AztecAddress::zero(), amount });
-    }
-
-    /** ==========================================================
-     * ================= TOKEN LIBRARIES =========================
-     * ======================================================== */
-
-    /// @notice Validates that the caller is the minter
-    /// @param sender The address of the caller
-    /// @param minter The address of the authorized minter
-    #[contract_library_method]
-    fn _validate_minter(sender: AztecAddress, minter: AztecAddress) {
-        assert(minter.eq(sender), "caller is not minter");
-    }
 
     /// @notice Decreases the private balance of `account` by `amount` and emits a private balance note with the change to account
     /// @param account The address of the account to decrease the balance of
@@ -338,7 +314,9 @@ pub contract Token {
     /// @param max_notes The maximum number of notes to process in a single call
     #[internal("private")]
     fn _decrease_private_balance(account: AztecAddress, amount: u128, max_notes: u32) {
+        // 1. Initially just subtract the amount but then explain that if this is lots of notes then this will be problematic because the loop will be arbitrarily long, which is why we have the max_notes parameter and recursive calls. We will nullify up to max_notes notes in each call, and if we haven't nullified enough notes after the first call, we will make a recursive call to nullify more notes until we have nullified enough notes to cover the amount.
         // Subtracts `amount` from the private balance of `account`
+        // This needs to be an internal function so it can be called recursively by the recurse_subtract_balance_internal function
         let change = self.internal._subtract_balance(account, amount, max_notes);
         // Increases `change` to the private balance of `account`, and emits a private balance note to account
         self.storage.private_balances.at(account).add(change).deliver(
@@ -372,6 +350,7 @@ pub contract Token {
     #[internal("public")]
     fn _decrease_public_balance(from: AztecAddress, amount: u128) {
         // read the current public balance of `from`, subtract `amount`
+        // Why don't we need to check for underflow here? Because if the balance is too low, the subtraction will underflow and revert the transaction, which is the desired behavior. @claude Add a test to show this please
         let new_balance = self.storage.public_balances.at(from).read() - amount;
         // update the public balance of `from` with the new balance
         self.storage.public_balances.at(from).write(new_balance);
@@ -385,7 +364,9 @@ pub contract Token {
     /// @return The change to return to the owner
     #[internal("private")]
     fn _subtract_balance(account: AztecAddress, amount: u128, max_notes: u32) -> u128 {
+        // 1. Try to subtract the amount by consuming up to max_notes notes from the private balance of account. If we are able to subtract the full amount, then we return 0 as the change. If we are not able to subtract the full amount, then we return the amount we were able to subtract as change and make a recursive call to try to subtract the remaining amount.
         let subtracted = self.storage.private_balances.at(account).try_sub(amount, max_notes);
+        // check if subtracted amount is greater than or equal to the amount we wanted to subtract
         if subtracted >= amount {
             // We have achieved our goal of nullifying notes that add up to more than amount, so we return the change.
             subtracted - amount
@@ -405,55 +386,8 @@ pub contract Token {
     /// @param amount The amount of tokens to increase the total supply by
     #[internal("public")]
     fn _increase_total_supply(amount: u128) {
+        // this is the same as increase public balance logic
         let new_supply = self.storage.total_supply.read() + amount;
         self.storage.total_supply.write(new_supply);
-    }
-
-    /// @notice Decreases the total supply by `amount`
-    /// @param amount The amount to decrease the total supply by
-    #[internal("public")]
-    fn _decrease_total_supply(amount: u128) {
-        let new_supply = self.storage.total_supply.read() - amount;
-        self.storage.total_supply.write(new_supply);
-    }
-
-    /// @notice Mints tokens to a public balance and increases the total supply
-    /// @param to The address of the recipient
-    /// @param amount The amount of tokens to mint
-    #[internal("public")]
-    fn _mint_to_public(to: AztecAddress, amount: u128) {
-        self.internal._increase_public_balance(to, amount);
-        self.internal._increase_total_supply(amount);
-
-        self.emit(Transfer { from: AztecAddress::zero(), to, amount });
-    }
-
-    /// @notice Mints tokens to a private balance and enqueues a public call to increase the total supply
-    /// @param to The address of the recipient
-    /// @param amount The amount of tokens to mint
-    #[internal("private")]
-    fn _mint_to_private(to: AztecAddress, amount: u128) {
-        self.internal._increase_private_balance(to, amount);
-        self.enqueue_self.increase_total_supply_internal(amount);
-    }
-
-    /// @notice Burns tokens from a public balance and decreases the total supply
-    /// @param from The address to burn tokens from
-    /// @param amount The amount of tokens to burn
-    #[internal("public")]
-    fn _burn_public(from: AztecAddress, amount: u128) {
-        self.internal._decrease_public_balance(from, amount);
-        self.internal._decrease_total_supply(amount);
-
-        self.emit(Transfer { from, to: AztecAddress::zero(), amount });
-    }
-
-    /// @notice Burns tokens from a private balance and enqueues a public call to decrease the total supply
-    /// @param from The address to burn tokens from
-    /// @param amount The amount of tokens to burn
-    #[internal("private")]
-    fn _burn_private(from: AztecAddress, amount: u128) {
-        self.internal._decrease_private_balance(from, amount, INITIAL_TRANSFER_CALL_MAX_NOTES);
-        self.enqueue_self.decrease_total_supply_internal(amount);
     }
 }
