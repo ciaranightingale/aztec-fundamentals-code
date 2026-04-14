@@ -142,7 +142,7 @@ pub unconstrained fn get_private_balance_notes(
     offset: u32,
 ) -> BoundedVec<UintNote, MAX_NOTES_PER_PAGE> {
     // `utility_context_at` creates an unconstrained execution context scoped to the token contract.
-    // This is a test-only helper -- in the TXE (Test eXecution Environment), it gives us the
+    // This is a test-only helper - in the TXE (Test eXecution Environment), it gives us the
     // ability to query the PXE's note database using the token contract's storage layout.
     // The closure receives a `context` that knows which contract's storage slots to reference.
     let notes = env.utility_context_at(token_contract_address, |context| {

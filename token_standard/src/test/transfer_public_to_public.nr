@@ -3,7 +3,7 @@ use crate::Token;
 use aztec::test::helpers::authwit as authwit_cheatcodes;
 
 #[test]
-unconstrained fn public_transfer() {
+unconstrained fn test_public_transfer() {
     // Setup without account contracts. We are not using authwits here, so dummy accounts are enough
     let (mut env, token_contract_address, owner, recipient) =
         utils::setup_and_mint_to_public(false);
@@ -30,7 +30,7 @@ unconstrained fn public_transfer() {
 }
 
 #[test]
-unconstrained fn public_transfer_to_self() {
+unconstrained fn test_public_transfer_to_self() {
     // Setup without account contracts. We are not using authwits here, so dummy accounts are enough
     let (mut env, token_contract_address, owner, _) =
         utils::setup_and_mint_to_public(false);
@@ -50,7 +50,7 @@ unconstrained fn public_transfer_to_self() {
 }
 
 #[test]
-unconstrained fn public_transfer_on_behalf_of_other() {
+unconstrained fn test_public_transfer_on_behalf_of_other() {
     // Setup with account contracts. Slower since we actually deploy them, but needed for authwits.
     let (mut env, token_contract_address, owner, recipient) =
         utils::setup_and_mint_to_public(true);
